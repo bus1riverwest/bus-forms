@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <title>Καταμέτρηση Επιβατών</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .form-section { margin-bottom: 20px; }
+    .tables-container {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #aaa; padding: 6px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    input[type="text"], input[type="number"], input[type="date"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 5px;
+    }
+    .break-row td {
+      background-color: #ffe0e0;
+      font-weight: bold;
+    }
+    .empty-row td {
+      background-color: #f9f9f9;
+      height: 28px; /* ίδιο πάχος με τις άλλες σειρές */
+      text-align: center;
+    }
+    .total-row td {
+      background-color: #e0ffe0;
+      font-weight: bold;
+    }
+    h2 { text-align: center; }
+    .table-wrapper { flex: 1; min-width: 300px; }
+    input.invalid {
+      border: 2px solid red;
+    }
+    button {
+      padding: 8px 15px;
+      margin-right: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    @media (max-width: 700px) {
+      .tables-container {
+        flex-direction: column;
+      }
+      .table-wrapper {
+        min-width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Καταμέτρηση Επιβατών Λεωφορείου RIVER WEST (Σάββατο/Εμπορική Κυριακή)</h1>
+
+<div class="form-section">
+  <label>Οδηγός 1: <input type="text" id="driver1"></label><br><br>
+  <label>Οδηγός 2: <input type="text" id="driver2"></label><br><br>
+  <label>Ημερομηνία: <input type="date" id="date"></label><br>
+</div>
+
+<div class="tables-container">
+  <div class="table-wrapper">
+    <h2>Μετρό Αιγάλεω → RIVER WEST</h2>
+    <table id="table1">
+      <thead>
+        <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td>Σύνολο Επιβατών</td>
+          <td id="total1">0</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="table-wrapper">
+    <h2>RIVER WEST → Μετρό Αιγάλεω</h2>
+    <table id="table2">
+      <thead>
+        <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td>Σύνολο Επιβατών</td>
+          <td id="total2">0</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<br>
+<button onclick="exportAndClear()">Εξαγωγή σε Excel & Εκκαθάριση</button>
+
+<script>
+  const schedule1 = [
+    "8:45", "9:00", "9:20", "9:40", "10:00", "10:20", "10:40", "11:00", "11:20",
+    "11:40", "12:00", "12:20", "12:40", "13:00", "13:20", "13:40", "13:50", "BREAK",
+    "14:40", "15:00", "15:20", "15:40", "16:00", "16:20", "16:40", "17:00", "17:20",
+    "17:40", "17:50", "BREAK", "18:40", "19:00", "19:20", "19:40"
+  ];
+
+  const schedule2 = [
+    "-", "9:10", "9:30", "9:50", "10:10", "10:30", "10:50", "11:10", "11:30", "11:50",
+    "12:10", "12:30", "12:50", "13:10", "13:30", "13:45", "BREAK", "14:30", "14:50",
+    "15:10", "15:30", "15:50", "16:10", "16:30", "16:50", "17:10", "17:30", "17:45",
+    "BREAK", "18:30", "18:50", "19:10", "19:30", "19:50", "20:10", "20:30", "20:50"
+  ];
+
+  function populateTable(tableId, times, totalId, savedValues = []) {
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    tbody.innerHTML = '';
+    let index = 0;
+    times.forEach(time => {
+      if (time === "BREAK") {
+        const row = document.createElement("tr");
+        row.className = "break-row";
+        row.innerHTML = `<td colspan="2">ΔΙΑΛΕΙΜΜΑ</td>`;
+        tbody.appendChild(row);
+      } else if (time === "-") {
+        const row = document.createElement("tr");
+        row.className = "empty-row";
+        row.innerHTML = `<td>—</td><td></td>`;
+        tbody.appendChild(row);
+      } else {
+        const row = document.createElement("tr");
+        const value = savedValues[index] || '';
+        row.innerHTML = `
+          <td>${time}</td>
+          <td><input type="number" min="0" max="20" value="${value}" oninput="handleInput(this, '${tableId}', '${totalId}'); saveData()"></td>`;
+        tbody.appendChild(row);
+        index++;
+      }
+    });
+  }
+
+  function handleInput(input, tableId, totalId) {
+    let val = parseInt(input.value, 10);
+    if (isNaN(val) || val < 0) {
+      input.value = '';
+    } else if (val > 20) {
+      input.value = 20;
+      val = 20;
+    }
+    updateTotal(tableId, totalId);
+  }
+
+  function updateTotal(tableId, totalId) {
+    const table = document.getElementById(tableId);
+    let sum = 0;
+    table.querySelectorAll("tbody input[type='number']").forEach(input => {
+      const val = parseInt(input.value, 10);
+      if (!isNaN(val) && val >= 0) {
+        sum += val;
+      }
+    });
+    document.getElementById(totalId).textContent = sum;
+  }
+
+  function formatDateToDDMMYYYY(dateStr) {
+    const [yyyy, mm, dd] = dateStr.split("-");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  function validateInputs() {
+    let valid = true;
+    ['driver1', 'driver2', 'date'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) {
+        el.classList.add('invalid');
+        valid = false;
+      } else {
+        el.classList.remove('invalid');
+      }
+    });
+    return valid;
+  }
+
+  function exportToExcel() {
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
+
+    const table1Rows = [];
+    document.querySelectorAll("#table1 tbody tr").forEach(row => {
+      if (row.classList.contains('break-row')) {
+        table1Rows.push(`<tr class="break-row"><td colspan="2">ΔΙΑΛΕΙΜΜΑ</td></tr>`);
+      } else if (row.classList.contains('empty-row')) {
+        table1Rows.push(`<tr class="empty-row"><td>—</td><td></td></tr>`);
+      } else {
+        const time = row.cells[0].textContent;
+        const val = row.querySelector('input').value || '0';
+        table1Rows.push(`<tr><td>${time}</td><td>${val}</td></tr>`);
+      }
+    });
+
+    const table2Rows = [];
+    document.querySelectorAll("#table2 tbody tr").forEach(row => {
+      if (row.classList.contains('break-row')) {
+        table2Rows.push(`<tr class="break-row"><td colspan="2">ΔΙΑΛΕΙΜΜΑ</td></tr>`);
+      } else if (row.classList.contains('empty-row')) {
+        table2Rows.push(`<tr class="empty-row"><td>—</td><td></td></tr>`);
+      } else {
+        const time = row.cells[0].textContent;
+        const val = row.querySelector('input').value || '0';
+        table2Rows.push(`<tr><td>${time}</td><td>${val}</td></tr>`);
+      }
+    });
+
+    const table1Html = `
+      <table border="1" style="border-collapse:collapse;">
+        <thead>
+          <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
+        </thead>
+        <tbody>
+          ${table1Rows.join('')}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td>Σύνολο Επιβατών</td>
+            <td>${document.getElementById("total1").textContent}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+
+    const table2Html = `
+      <table border="1" style="border-collapse:collapse;">
+        <thead>
+          <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
+        </thead>
+        <tbody>
+          ${table2Rows.join('')}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td>Σύνολο Επιβατών</td>
+            <td>${document.getElementById("total2").textContent}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+
+    const driver1 = document.getElementById("driver1").value;
+    const driver2 = document.getElementById("driver2").value;
+    const dateRaw = document.getElementById("date").value;
+    const dateFormatted = dateRaw ? formatDateToDDMMYYYY(dateRaw) : "____/____/2025";
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+            xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta charset="UTF-8"></head>
+      <body>
+        <h2>Οδηγός 1: ${driver1}</h2>
+        <h2>Οδηγός 2: ${driver2}</h2>
+        <h2>Ημερομηνία: ${dateFormatted}</h2>
+        <table><tr>
+          <td style="vertical-align: top;">${table1Html}</td>
+          <td style="vertical-align: top;">${table2Html}</td>
+        </tr></table>
+      </body>
+      </html>`;
+
+    const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bus_passenger_count_${dateFormatted.replace(/\//g, '-')}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function saveData() {
+    const data = {
+      driver1: document.getElementById("driver1").value,
+      driver2: document.getElementById("driver2").value,
+      date: document.getElementById("date").value,
+      table1: Array.from(document.querySelectorAll("#table1 input")).map(i => i.value),
+      table2: Array.from(document.querySelectorAll("#table2 input")).map(i => i.value)
+    };
+    localStorage.setItem("busFormData", JSON.stringify(data));
+  }
+
+  function loadData() {
+    const saved = localStorage.getItem("busFormData");
+    if (!saved) {
+      populateTable("table1", schedule1, "total1");
+      populateTable("table2", schedule2, "total2");
+      return;
+    }
+
+    const data = JSON.parse(saved);
+    document.getElementById("driver1").value = data.driver1 || '';
+    document.getElementById("driver2").value = data.driver2 || '';
+    document.getElementById("date").value = data.date || '';
+
+    populateTable("table1", schedule1, "total1", data.table1 || []);
+    populateTable("table2", schedule2, "total2", data.table2 || []);
+
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
+  }
+
+  function exportAndClear() {
+    if (!validateInputs()) {
+      alert("Παρακαλώ συμπληρώστε όλα τα πεδία (Οδηγός 1, Οδηγός 2, Ημερομηνία) πριν την εξαγωγή.");
+      return;
+    }
+
+    if (!confirm("Θέλετε να εξαγάγετε τα δεδομένα σε Excel και να τα εκκαθαρίσετε;")) {
+      return;
+    }
+
+    exportToExcel();
+
+    alert("Η εκκαθάριση θα γίνει σε 2 δευτερόλεπτα...");
+    setTimeout(() => {
+      localStorage.removeItem("busFormData");
+      document.getElementById("driver1").value = '';
+      document.getElementById("driver2").value = '';
+      document.getElementById("date").value = '';
+      populateTable("table1", schedule1, "total1");
+      populateTable("table2", schedule2, "total2");
+      updateTotal("table1", "total1");
+      updateTotal("table2", "total2");
+    }, 2000);
+  }
+
+  document.getElementById("driver1").addEventListener("input", saveData);
+  document.getElementById("driver2").addEventListener("input", saveData);
+  document.getElementById("date").addEventListener("change", saveData);
+
+  loadData();
+</script>
+
+</body>
+</html>
