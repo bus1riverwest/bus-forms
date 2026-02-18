@@ -71,6 +71,29 @@
 <button onclick="exportFormAndSave()">Export form and save</button>
 
 <script>
+  // ====== FORM META ======
+  const FORM_TITLE = "Καταμέτρηση Επιβατών Λεωφορείου RIVER WEST (Εμπορικές Κυριακές 2ο λεωφορείο)";
+  const FORM_CODE  = "BUS_PASSENGER_COUNT_SUN_BUS2_V1";
+
+  // ====== TIMESTAMPS (ανά input) ======
+  const fieldTimes = {}; // key -> timestamp string
+
+  function nowFormatted() {
+    const d = new Date();
+    return d.toLocaleString("el-GR");
+  }
+
+  function stamp(key) {
+    fieldTimes[key] = nowFormatted();
+    localStorage.setItem("busFieldTimes", JSON.stringify(fieldTimes));
+  }
+
+  function loadStamps() {
+    const saved = localStorage.getItem("busFieldTimes");
+    if (!saved) return;
+    try { Object.assign(fieldTimes, JSON.parse(saved)); } catch {}
+  }
+
   const MAX_PAX = 20;
 
   const schedule1 = [
@@ -124,6 +147,7 @@
     const tbody = document.querySelector(`#${tableId} tbody`);
     tbody.innerHTML = '';
 
+    let index = 0;
     times.forEach(time => {
       if (time === "BREAK") {
         const row = document.createElement("tr");
@@ -132,13 +156,18 @@
         tbody.appendChild(row);
       } else {
         const row = document.createElement("tr");
+        const key = `${tableId}_${index}`;
+
         row.innerHTML = `
           <td>${time}</td>
           <td>
             <input type="number" min="0" max="${MAX_PAX}"
-              oninput="handleInput(this, '${tableId}', '${totalId}'); saveData()">
+              oninput="handleInput(this, '${tableId}', '${totalId}');
+                       saveData();
+                       stamp('${key}')">
           </td>`;
         tbody.appendChild(row);
+        index++;
       }
     });
 
@@ -164,6 +193,75 @@
       if (!isNaN(val) && val >= 0) sum += val;
     });
     document.getElementById(totalId).textContent = sum;
+  }
+
+  // ========= EMAIL BODY με Timestamp ανά input =========
+  function buildEmailBodyText(dateFormatted) {
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
+
+    const driver = document.getElementById("driver").value.trim();
+
+    const lines1 = [];
+    let idx1 = 0;
+    document.querySelectorAll("#table1 tbody tr").forEach(row => {
+      if (row.classList.contains('break-row')) {
+        lines1.push("— ΔΙΑΛΕΙΜΜΑ —");
+      } else {
+        const time = row.cells[0].textContent.trim();
+        const val = row.querySelector('input')?.value || "0";
+        const key = `table1_${idx1}`;
+        const ts = fieldTimes[key] || "";
+        lines1.push(`${time}: ${val}  (⏱ ${ts})`);
+        idx1++;
+      }
+    });
+
+    const lines2 = [];
+    let idx2 = 0;
+    document.querySelectorAll("#table2 tbody tr").forEach(row => {
+      if (row.classList.contains('break-row')) {
+        lines2.push("— ΔΙΑΛΕΙΜΜΑ —");
+      } else {
+        const time = row.cells[0].textContent.trim();
+        const val = row.querySelector('input')?.value || "0";
+        const key = `table2_${idx2}`;
+        const ts = fieldTimes[key] || "";
+        lines2.push(`${time}: ${val}  (⏱ ${ts})`);
+        idx2++;
+      }
+    });
+
+    const total1 = document.getElementById("total1").textContent;
+    const total2 = document.getElementById("total2").textContent;
+
+    const tsDriver = fieldTimes["driver"] || "";
+    const tsDate   = fieldTimes["date"] || "";
+
+    return [
+      `FORM_TITLE: ${FORM_TITLE}`,
+      `FORM_CODE: ${FORM_CODE}`,
+      "",
+      `DATE: ${dateFormatted}  (⏱ ${tsDate})`,
+      `DRIVER: ${driver}  (⏱ ${tsDriver})`,
+      "",
+      "DIR: Μετρό Αιγάλεω → RIVER WEST",
+      ...lines1,
+      `TOTAL_DIR1: ${total1}`,
+      "",
+      "DIR: RIVER WEST → Μετρό Αιγάλεω",
+      ...lines2,
+      `TOTAL_DIR2: ${total2}`
+    ].join("\n");
+  }
+
+  function openEmailDraft(dateFormatted) {
+    const to = "gkarampampas@riverwest.gr";
+    const subject = `[${FORM_CODE}] ${FORM_TITLE} | ${dateFormatted}`;
+    const body = buildEmailBodyText(dateFormatted);
+
+    const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
   }
 
   function exportToExcel(dateFormatted) {
@@ -215,6 +313,8 @@
             xmlns:x="urn:schemas-microsoft-com:office:excel">
       <head><meta charset="UTF-8"></head>
       <body>
+        <h2>FORM_TITLE: ${FORM_TITLE}</h2>
+        <h2>FORM_CODE: ${FORM_CODE}</h2>
         <h2>Οδηγός: ${driver}</h2>
         <h2>Ημερομηνία: ${dateFormatted}</h2>
         <table><tr>
@@ -224,7 +324,7 @@
       </body>
       </html>`;
 
-    const filename = `bus_passenger_count_ΕΜΠΟΡΙΚΕΣ_ΚΥΡΙΑΚΕΣ_2ο_λεωφορείο_${dateFormatted.replace(/\//g, '-')}.xls`;
+    const filename = `bus_passenger_count_${FORM_CODE}_${dateFormatted.replace(/\//g, '-')}.xls`;
     triggerDownload(filename, html, "application/vnd.ms-excel");
   }
 
@@ -239,7 +339,7 @@
   function downloadFilledForm(dateFormatted) {
     freezeInputsForSnapshot();
     const fullHtml = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
-    const filename = `bus_passenger_form_ΕΜΠΟΡΙΚΕΣ_ΚΥΡΙΑΚΕΣ_2ο_λεωφορείο_${dateFormatted.replace(/\//g, '-')}.html`;
+    const filename = `bus_passenger_form_${FORM_CODE}_${dateFormatted.replace(/\//g, '-')}.html`;
     triggerDownload(filename, fullHtml, "text/html;charset=utf-8");
   }
 
@@ -254,19 +354,17 @@
   }
 
   function loadData() {
+    loadStamps();
+
     const saved = localStorage.getItem("busFormData");
-    if (!saved) {
-      populateTable("table1", schedule1, "total1");
-      populateTable("table2", schedule2, "total2");
-      return;
-    }
+    populateTable("table1", schedule1, "total1");
+    populateTable("table2", schedule2, "total2");
+
+    if (!saved) return;
 
     const data = JSON.parse(saved);
     document.getElementById("driver").value = data.driver || '';
     document.getElementById("date").value = data.date || '';
-
-    populateTable("table1", schedule1, "total1");
-    populateTable("table2", schedule2, "total2");
 
     // restore values
     const t1 = Array.from(document.querySelectorAll("#table1 input"));
@@ -280,6 +378,9 @@
 
   function clearFormNow() {
     localStorage.removeItem("busFormData");
+    localStorage.removeItem("busFieldTimes");
+    Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
+
     document.getElementById("driver").value = '';
     document.getElementById("date").value = '';
     populateTable("table1", schedule1, "total1");
@@ -290,7 +391,8 @@
 
   // 1) Export Excel
   // 2) Ask to download filled form
-  // 3) Clear
+  // 3) Open Email Draft
+  // 4) Clear
   function exportFormAndSave() {
     if (!validateInputs()) {
       alert("Παρακαλώ συμπληρώστε όλα τα πεδία (Οδηγός, Ημερομηνία) πριν την εξαγωγή.");
@@ -302,16 +404,16 @@
 
     exportToExcel(dateFormatted);
 
-    const saveForm = confirm("Θέλετε να σωθεί ένα αντίγραφο της ΦΟΡΜΑΣ (.html) στο Downloads;");
-    if (saveForm) {
-      setTimeout(() => downloadFilledForm(dateFormatted), 200);
-    }
+    const saveForm = confirm("Θέλετε να σωθεί ένα αντίγραφο της ΦΟΡΡΜΑΣ (.html) στο Downloads;");
+    if (saveForm) setTimeout(() => downloadFilledForm(dateFormatted), 200);
+
+    openEmailDraft(dateFormatted);
 
     setTimeout(() => clearFormNow(), 1200);
   }
 
-  document.getElementById("driver").addEventListener("input", saveData);
-  document.getElementById("date").addEventListener("change", saveData);
+  document.getElementById("driver").addEventListener("input", () => { saveData(); stamp("driver"); });
+  document.getElementById("date").addEventListener("change", () => { saveData(); stamp("date"); });
 
   loadData();
 </script>
