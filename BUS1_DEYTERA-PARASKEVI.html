@@ -17,7 +17,7 @@
     h2 { text-align: center; }
     .table-wrapper { flex: 1; min-width: 300px; }
     input.invalid { border: 2px solid red; }
-    button { padding: 8px 15px; margin-right: 10px; font-size: 16px; cursor: pointer; }
+    button { padding: 10px 16px; margin-right: 10px; font-size: 16px; cursor: pointer; }
     @media (max-width: 700px) {
       .tables-container { flex-direction: column; }
       .table-wrapper { min-width: auto; }
@@ -59,7 +59,7 @@
 </div>
 
 <br>
-<button onclick="exportAndClear()">Εξαγωγή σε Excel & Εκκαθάριση</button>
+<button onclick="sendMailAndSave()">Αποστολή με mail και αποθήκευση</button>
 
 <script>
   // ====== FORM META ======
@@ -82,9 +82,7 @@
   function loadStamps() {
     const saved = localStorage.getItem("busFieldTimes");
     if (!saved) return;
-    try {
-      Object.assign(fieldTimes, JSON.parse(saved));
-    } catch {}
+    try { Object.assign(fieldTimes, JSON.parse(saved)); } catch {}
   }
 
   // ====== SCHEDULES ======
@@ -122,7 +120,7 @@
       } else {
         const row = document.createElement("tr");
         const value = savedValues[index] || '';
-        const key = `${tableId}_${index}`; // π.χ. table1_0
+        const key = `${tableId}_${index}`;
 
         row.innerHTML = `
           <td>${time}</td>
@@ -240,7 +238,7 @@
   }
 
   function openEmailDraft() {
-    const to = "gkarampampas@riverwest.gr";
+    const to = "gkarampampas@riverwest.gr,cremoundos@riverwest.gr";
     const dateRaw = document.getElementById("date").value;
     const dateFormatted = dateRaw ? formatDateToDDMMYYYY(dateRaw) : "";
     const subject = `[${FORM_CODE}] ${FORM_TITLE} | ${dateFormatted}`;
@@ -337,7 +335,7 @@
   }
 
   function loadData() {
-    loadStamps(); // load timestamps first
+    loadStamps();
 
     const saved = localStorage.getItem("busFormData");
     if (!saved) {
@@ -358,36 +356,36 @@
     updateTotal("table2", "total2");
   }
 
-  function exportAndClear() {
-    if (!validateInputs()) {
-      alert("Παρακαλώ συμπληρώστε όλα τα πεδία (Οδηγός 1, Οδηγός 2, Ημερομηνία) πριν την εξαγωγή.");
-      return;
-    }
+  function clearFormSilent() {
+    localStorage.removeItem("busFormData");
+    localStorage.removeItem("busFieldTimes");
+    Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
 
-    if (!confirm("Θέλετε να εξαγάγετε τα δεδομένα σε Excel και να τα εκκαθαρίσετε;")) return;
+    document.getElementById("driver1").value = '';
+    document.getElementById("driver2").value = '';
+    document.getElementById("date").value = '';
 
-    exportToExcel();
-    openEmailDraft();
+    populateTable("table1", schedule1, "total1");
+    populateTable("table2", schedule2, "total2");
 
-    alert("Η εκκαθάριση θα γίνει σε 2 δευτερόλεπτα...");
-    setTimeout(() => {
-      localStorage.removeItem("busFormData");
-      localStorage.removeItem("busFieldTimes"); // clear timestamps
-      Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]); // reset in-memory too
-
-      document.getElementById("driver1").value = '';
-      document.getElementById("driver2").value = '';
-      document.getElementById("date").value = '';
-
-      populateTable("table1", schedule1, "total1");
-      populateTable("table2", schedule2, "total2");
-
-      updateTotal("table1", "total1");
-      updateTotal("table2", "total2");
-    }, 2000);
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
   }
 
-  // Stamp the header fields too
+  function sendMailAndSave() {
+    if (!validateInputs()) return;
+
+    // 1) Save locally (Excel)
+    exportToExcel();
+
+    // 2) Open mail draft
+    openEmailDraft();
+
+    // 3) Clear silently (give mailto a moment)
+    setTimeout(() => clearFormSilent(), 1200);
+  }
+
+  // Stamp header fields too
   document.getElementById("driver1").addEventListener("input", () => { saveData(); stamp("driver1"); });
   document.getElementById("driver2").addEventListener("input", () => { saveData(); stamp("driver2"); });
   document.getElementById("date").addEventListener("change", () => { saveData(); stamp("date"); });
