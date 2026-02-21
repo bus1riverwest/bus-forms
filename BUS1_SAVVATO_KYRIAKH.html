@@ -20,24 +20,18 @@
       box-sizing: border-box;
       padding: 5px;
     }
-    .break-row td {
-      background-color: #ffe0e0;
-      font-weight: bold;
-    }
+    .break-row td { background-color: #ffe0e0; font-weight: bold; }
     .empty-row td {
       background-color: #f9f9f9;
       height: 28px; /* ίδιο πάχος με τις άλλες σειρές */
       text-align: center;
     }
-    .total-row td {
-      background-color: #e0ffe0;
-      font-weight: bold;
-    }
+    .total-row td { background-color: #e0ffe0; font-weight: bold; }
     h2 { text-align: center; }
     .table-wrapper { flex: 1; min-width: 300px; }
     input.invalid { border: 2px solid red; }
     button {
-      padding: 8px 15px;
+      padding: 10px 16px;
       margin-right: 10px;
       font-size: 16px;
       cursor: pointer;
@@ -93,7 +87,7 @@
 </div>
 
 <br>
-<button onclick="exportAndClear()">Εξαγωγή σε Excel & Εκκαθάριση</button>
+<button onclick="sendMailAndSave()">Αποστολή με mail και αποθήκευση</button>
 
 <script>
   // ====== FORM META ======
@@ -152,7 +146,7 @@
       } else {
         const row = document.createElement("tr");
         const value = savedValues[index] || '';
-        const key = `${tableId}_${index}`; // π.χ. table1_0
+        const key = `${tableId}_${index}`;
 
         row.innerHTML = `
           <td>${time}</td>
@@ -208,7 +202,7 @@
     return valid;
   }
 
-  // ========= EMAIL BODY με Timestamp ανά input =========
+  // ========= EMAIL BODY =========
   function buildEmailBodyText() {
     updateTotal("table1", "total1");
     updateTotal("table2", "total2");
@@ -221,11 +215,9 @@
     const lines1 = [];
     let idx1 = 0;
     document.querySelectorAll("#table1 tbody tr").forEach(row => {
-      if (row.classList.contains('break-row')) {
-        lines1.push("— ΔΙΑΛΕΙΜΜΑ —");
-      } else if (row.classList.contains('empty-row')) {
-        lines1.push("—");
-      } else {
+      if (row.classList.contains('break-row')) lines1.push("— ΔΙΑΛΕΙΜΜΑ —");
+      else if (row.classList.contains('empty-row')) lines1.push("—");
+      else {
         const time = row.cells[0].textContent.trim();
         const val = row.querySelector('input')?.value || "0";
         const key = `table1_${idx1}`;
@@ -238,11 +230,9 @@
     const lines2 = [];
     let idx2 = 0;
     document.querySelectorAll("#table2 tbody tr").forEach(row => {
-      if (row.classList.contains('break-row')) {
-        lines2.push("— ΔΙΑΛΕΙΜΜΑ —");
-      } else if (row.classList.contains('empty-row')) {
-        lines2.push("—");
-      } else {
+      if (row.classList.contains('break-row')) lines2.push("— ΔΙΑΛΕΙΜΜΑ —");
+      else if (row.classList.contains('empty-row')) lines2.push("—");
+      else {
         const time = row.cells[0].textContent.trim();
         const val = row.querySelector('input')?.value || "0";
         const key = `table2_${idx2}`;
@@ -278,7 +268,7 @@
   }
 
   function openEmailDraft() {
-    const to = "gkarampampas@riverwest.gr";
+    const to = "gkarampampas@riverwest.gr,cremoundos@riverwest.gr";
     const dateRaw = document.getElementById("date").value;
     const dateFormatted = dateRaw ? formatDateToDDMMYYYY(dateRaw) : "";
     const subject = `[${FORM_CODE}] ${FORM_TITLE} | ${dateFormatted}`;
@@ -288,6 +278,7 @@
     window.location.href = mailto;
   }
 
+  // ========= EXPORT TO EXCEL =========
   function exportToExcel() {
     updateTotal("table1", "total1");
     updateTotal("table2", "total2");
@@ -320,12 +311,8 @@
 
     const table1Html = `
       <table border="1" style="border-collapse:collapse;">
-        <thead>
-          <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
-        </thead>
-        <tbody>
-          ${table1Rows.join('')}
-        </tbody>
+        <thead><tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr></thead>
+        <tbody>${table1Rows.join('')}</tbody>
         <tfoot>
           <tr class="total-row">
             <td>Σύνολο Επιβατών</td>
@@ -336,12 +323,8 @@
 
     const table2Html = `
       <table border="1" style="border-collapse:collapse;">
-        <thead>
-          <tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr>
-        </thead>
-        <tbody>
-          ${table2Rows.join('')}
-        </tbody>
+        <thead><tr><th>Ώρα</th><th>Αριθμός Επιβατών</th></tr></thead>
+        <tbody>${table2Rows.join('')}</tbody>
         <tfoot>
           <tr class="total-row">
             <td>Σύνολο Επιβατών</td>
@@ -414,37 +397,31 @@
     updateTotal("table2", "total2");
   }
 
-  function exportAndClear() {
-    if (!validateInputs()) {
-      alert("Παρακαλώ συμπληρώστε όλα τα πεδία (Οδηγός 1, Οδηγός 2, Ημερομηνία) πριν την εξαγωγή.");
-      return;
-    }
+  function clearFormSilent() {
+    localStorage.removeItem("busFormData");
+    localStorage.removeItem("busFieldTimes");
+    Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
 
-    if (!confirm("Θέλετε να εξαγάγετε τα δεδομένα σε Excel και να τα εκκαθαρίσετε;")) {
-      return;
-    }
+    document.getElementById("driver1").value = '';
+    document.getElementById("driver2").value = '';
+    document.getElementById("date").value = '';
+
+    populateTable("table1", schedule1, "total1");
+    populateTable("table2", schedule2, "total2");
+
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
+  }
+
+  function sendMailAndSave() {
+    if (!validateInputs()) return;
 
     exportToExcel();
     openEmailDraft();
 
-    alert("Η εκκαθάριση θα γίνει σε 2 δευτερόλεπτα...");
-    setTimeout(() => {
-      localStorage.removeItem("busFormData");
-      localStorage.removeItem("busFieldTimes");
-      Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
-
-      document.getElementById("driver1").value = '';
-      document.getElementById("driver2").value = '';
-      document.getElementById("date").value = '';
-
-      populateTable("table1", schedule1, "total1");
-      populateTable("table2", schedule2, "total2");
-      updateTotal("table1", "total1");
-      updateTotal("table2", "total2");
-    }, 2000);
+    setTimeout(() => clearFormSilent(), 1200);
   }
 
-  // Stamp the header fields too
   document.getElementById("driver1").addEventListener("input", () => { saveData(); stamp("driver1"); });
   document.getElementById("driver2").addEventListener("input", () => { saveData(); stamp("driver2"); });
   document.getElementById("date").addEventListener("change", () => { saveData(); stamp("date"); });
