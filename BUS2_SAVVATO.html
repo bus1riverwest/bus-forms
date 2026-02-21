@@ -26,7 +26,7 @@
     .table-wrapper { flex: 1; min-width: 300px; }
     input.invalid { border: 2px solid red; }
     button {
-      padding: 8px 15px;
+      padding: 10px 16px;
       margin-right: 10px;
       font-size: 16px;
       cursor: pointer;
@@ -81,7 +81,7 @@
 </div>
 
 <br>
-<button onclick="exportAndClear()">Εξαγωγή σε Excel & Εκκαθάριση</button>
+<button onclick="sendMailAndSave()">Αποστολή με mail και αποθήκευση</button>
 
 <script>
   // ====== FORM META ======
@@ -139,7 +139,7 @@
       } else {
         const row = document.createElement("tr");
         const value = savedValues[index] || '';
-        const key = `${tableId}_${index}`; // π.χ. table1_0
+        const key = `${tableId}_${index}`;
 
         row.innerHTML = `
           <td>${time}</td>
@@ -151,6 +151,8 @@
         index++;
       }
     });
+
+    updateTotal(tableId, totalId);
   }
 
   function handleInput(input, tableId, totalId) {
@@ -185,7 +187,7 @@
     return valid;
   }
 
-  // ========= EMAIL BODY με Timestamp ανά input =========
+  // ========= EMAIL BODY =========
   function buildEmailBodyText() {
     updateTotal("table1", "total1");
     updateTotal("table2", "total2");
@@ -249,7 +251,7 @@
   }
 
   function openEmailDraft() {
-    const to = "gkarampampas@riverwest.gr";
+    const to = "gkarampampas@riverwest.gr,cremoundos@riverwest.gr";
     const dateRaw = document.getElementById("date").value;
     const dateFormatted = dateRaw ? formatDateToDDMMYYYY(dateRaw) : "";
     const subject = `[${FORM_CODE}] ${FORM_TITLE} | ${dateFormatted}`;
@@ -366,30 +368,28 @@
     updateTotal("table2", "total2");
   }
 
-  function exportAndClear() {
-    if (!validateInputs()) {
-      alert("Παρακαλώ συμπληρώστε όλα τα πεδία (Οδηγός, Ημερομηνία) πριν την εξαγωγή.");
-      return;
-    }
+  function clearFormSilent() {
+    localStorage.removeItem("busFormData");
+    localStorage.removeItem("busFieldTimes");
+    Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
 
-    if (!confirm("Θέλετε να εξαγάγετε τα δεδομένα σε Excel και να τα εκκαθαρίσετε;")) return;
+    document.getElementById("driver").value = '';
+    document.getElementById("date").value = '';
+
+    populateTable("table1", schedule1, "total1");
+    populateTable("table2", schedule2, "total2");
+
+    updateTotal("table1", "total1");
+    updateTotal("table2", "total2");
+  }
+
+  function sendMailAndSave() {
+    if (!validateInputs()) return;
 
     exportToExcel();
     openEmailDraft();
 
-    alert("Η εκκαθάριση θα γίνει σε 2 δευτερόλεπτα...");
-    setTimeout(() => {
-      localStorage.removeItem("busFormData");
-      localStorage.removeItem("busFieldTimes");
-      Object.keys(fieldTimes).forEach(k => delete fieldTimes[k]);
-
-      document.getElementById("driver").value = '';
-      document.getElementById("date").value = '';
-      populateTable("table1", schedule1, "total1");
-      populateTable("table2", schedule2, "total2");
-      updateTotal("table1", "total1");
-      updateTotal("table2", "total2");
-    }, 2000);
+    setTimeout(() => clearFormSilent(), 1200);
   }
 
   // Stamp header fields
